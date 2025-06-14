@@ -16,5 +16,4 @@ spec:
         - name: my-app
           image: CONTAINER_IMAGE
           ports:
-            - containerPort: 3000
-
+            - containerPort: 5000
