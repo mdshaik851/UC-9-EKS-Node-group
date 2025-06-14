@@ -1,0 +1,97 @@
+name: Build and Deploy Microservices
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'Terraform action to perform'
+        required: true
+        default: 'apply'
+        type: choice
+        options:
+          - apply
+          - destroy
+
+permissions:
+  id-token: write
+  contents: write
+
+env:
+  ECR_REPOSITORY: uc9-eks-cluster-repo
+  IMAGE_TAG: ${{ github.sha }}
+
+jobs:
+  patient-service:
+    name: Build Patient Service
+    runs-on: ubuntu-latest
+    
+    outputs:
+      ecr_registry: ${{ steps.login-ecr.outputs.registry }}
+    
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials using OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::994466158061:role/OIDC-Github-action
+          aws-region: ap-south-1
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build, tag, and push image
+        working-directory: micro-service/patient  # Verify this path matches your repo structure
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        run: |
+          docker build --progress=plain -t $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }} .
+          docker push $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}
+          docker tag $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }} $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:latest
+          docker push $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:latest
+
+  deploy:
+    name: Deploy App and ALB Ingress
+    needs: patient-service
+    runs-on: ubuntu-latest
+
+    env:
+      CLUSTER_NAME: uc9-eks-cluster-latest
+      AWS_REGION: ap-south-1
+      NAMESPACE: default
+      ECR_REGISTRY: ${{ needs.patient-service.outputs.ecr_registry }}
+      ECR_REPOSITORY: uc9-eks-cluster-repo
+      IMAGE_TAG: ${{ github.sha }}
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+      
+      - name: Configure AWS credentials using OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::994466158061:role/OIDC-Github-action
+          aws-region: ap-south-1
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v3
+
+      - name: Setup Helm
+        uses: azure/setup-helm@v3
+
+      - name: Update kubeconfig
+        run: |
+          aws eks update-kubeconfig --name $CLUSTER_NAME --region $AWS_REGION
+
+      - name: Verify Cluster Access
+        run: |
+          kubectl get nodes
+                
+      - name: Deployment + Service + Ingress
+        run: |
+          sed -i 's@CONTAINER_IMAGE@'"$ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}"'@' kubernetes/deployment.yaml
+          kubectl apply -f kubernetes/deployment.yaml
+          kubectl apply -f kubernetes/service.yaml
+          kubectl apply -f kubernetes/ingress.yaml
