@@ -36,14 +36,14 @@ jobs:
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: arn:aws:iam::994466158061:role/OIDC-Github-action
-          aws-region: ap-south-1
+          aws-region: us-west-1
 
       - name: Login to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
       - name: Build, tag, and push image
-        working-directory: micro-service/patient  # Verify this path matches your repo structure
+        working-directory: ./app  # Verify this path matches your repo structure
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
         run: |
@@ -59,7 +59,7 @@ jobs:
 
     env:
       CLUSTER_NAME: uc9-eks-cluster-latest
-      AWS_REGION: ap-south-1
+      AWS_REGION: us-west-1
       NAMESPACE: default
       ECR_REGISTRY: ${{ needs.patient-service.outputs.ecr_registry }}
       ECR_REPOSITORY: uc9-eks-cluster-repo
@@ -73,7 +73,7 @@ jobs:
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: arn:aws:iam::994466158061:role/OIDC-Github-action
-          aws-region: ap-south-1
+          aws-region: us-west-1
 
       - name: Setup kubectl
         uses: azure/setup-kubectl@v3

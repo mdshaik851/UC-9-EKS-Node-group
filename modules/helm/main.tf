@@ -33,10 +33,10 @@ resource "helm_release" "loadbalancer_controller" {
   namespace = "kube-system"
   timeout = 600   
 
-  # Value changes based on your Region (Below is for ap-south-1)
+  # Value changes based on your Region (Below is for us-west-1)
   set {
     name = "image.repository"
-    value = "602401143452.dkr.ecr.ap-south-1.amazonaws.com/amazon/aws-load-balancer-controller" 
+    value = "602401143452.dkr.ecr.us-west-1.amazonaws.com/amazon/aws-load-balancer-controller" 
   }       
 
   set {
